@@ -1,5 +1,5 @@
 name: "Build Sylius Test Application"
-description: "Builds a Sylius plugin's test application with the given PHP, Sylius, Symfony, MySQL versions."
+description: "Builds a Sylius plugin's test application with the given PHP, Sylius, Symfony, and database."
 
 inputs:
     # General
@@ -43,28 +43,25 @@ inputs:
 
     # Database
     database:
-        required: true
-        description: "Database engine to be used"
-        default: "mysql" # available options are "mysql", "mariadb", "postgresql" (deprecated, use "postgres"), "postgres"
-    database_version:
-        required: true
-        description: "Database engine version to be used"
+        required: false
+        description: "Database engine and version (e.g., 'mysql:8.4', 'postgres:16', 'mariadb:10.11')"
+        default: "mysql:8.4"
 
     # PHP
     php_version:
         required: true
         description: "PHP version to be used"
     php_extensions:
-        required: true
+        required: false
         description: "PHP extensions to be installed"
         default: "intl, gd, opcache, mysql, pdo_mysql, pgsql, pdo_pgsql"
     php_tools:
-        required: true
+        required: false
         description: "PHP tools to be installed"
         default: "symfony"
     php_coverage:
         required: false
-        description: "PHP coverage"
+        description: "PHP coverage driver"
         default: "none"
     composer_ignore_platform_reqs:
         required: false
@@ -98,7 +95,7 @@ inputs:
     node_version:
         required: false
         description: "Node.js version to be used"
-        default: "20.x"
+        default: "22.x"
 
     # Chrome (only when e2e_js is set to "yes")
     chrome_version:
@@ -119,58 +116,98 @@ runs:
         # Set up a database                                                 #
         #####################################################################
 
+        -   name: Parse database input
+            id: db
+            run: |
+                DB_INPUT="${{ inputs.database }}"
+
+                if [[ ! "$DB_INPUT" =~ : ]]; then
+                    echo "::error::Invalid format '$DB_INPUT'. Use 'type:version' (e.g., mysql:8.4, postgres:16, mariadb:10.11)"
+                    exit 1
+                fi
+
+                DB_TYPE="${DB_INPUT%%:*}"
+                DB_VERSION="${DB_INPUT##*:}"
+
+                if [[ ! "$DB_TYPE" =~ ^(mysql|mariadb|postgres)$ ]]; then
+                    echo "::error::Unsupported database type '$DB_TYPE'. Supported: mysql, mariadb, postgres"
+                    exit 1
+                fi
+
+                if [[ ! "$DB_VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+                    echo "::error::Invalid version format '$DB_VERSION'. Version must be numeric (e.g., 8.4, 16, 10.11.13)"
+                    exit 1
+                fi
+
+                if [ "$DB_TYPE" = "postgres" ]; then
+                    DB_DRIVER="pgsql"
+                else
+                    DB_DRIVER="mysql"
+                fi
+
+                echo "type=$DB_TYPE" >> $GITHUB_OUTPUT
+                echo "version=$DB_VERSION" >> $GITHUB_OUTPUT
+                echo "driver=$DB_DRIVER" >> $GITHUB_OUTPUT
+            shell: bash
+
         -   name: Shutdown default MySQL
             run: sudo service mysql stop
             shell: bash
 
         -   name: Setup MySQL
-            if: inputs.database == 'mysql'
+            if: steps.db.outputs.type == 'mysql'
             uses: mirromutth/mysql-action@v1.1
             with:
-                mysql version: "${{ inputs.database_version }}"
-                mysql root password: "root"
+                mysql version: "${{ steps.db.outputs.version }}"
+                mysql user: "sylius"
+                mysql password: "sylius"
+                mysql database: "sylius"
 
         -   name: Setup MariaDB
-            if: inputs.database == 'mariadb'
+            if: steps.db.outputs.type == 'mariadb'
             uses: getong/mariadb-action@v1.1
             with:
-                mariadb version: "${{ inputs.database_version }}"
-                mysql root password: "root"
-
-        -   name: Warn about postgresql deprecation
-            if: inputs.database == 'postgresql'
-            run: echo "::warning::Using 'postgresql' is deprecated, use 'postgres' instead"
-            shell: bash
+                mariadb version: "${{ steps.db.outputs.version }}"
+                mysql user: "sylius"
+                mysql password: "sylius"
+                mysql database: "sylius"
 
         -   name: Setup PostgreSQL
-            if: inputs.database == 'postgresql' || inputs.database == 'postgres'
+            if: steps.db.outputs.type == 'postgres'
             uses: harmon758/postgresql-action@v1
             with:
-                postgresql version: "${{ inputs.database_version }}"
-                postgresql password: "postgres"
+                postgresql version: "${{ steps.db.outputs.version }}"
+                postgresql user: "sylius"
+                postgresql password: "sylius"
+                postgresql db: "sylius"
+
+        -   name: Optimize PostgreSQL for CI
+            if: steps.db.outputs.type == 'postgres'
+            run: |
+                sudo -u postgres psql -c "ALTER SYSTEM SET fsync = 'off';"
+                sudo -u postgres psql -c "ALTER SYSTEM SET synchronous_commit = 'off';"
+                sudo -u postgres psql -c "ALTER SYSTEM SET full_page_writes = 'off';"
+                sudo -u postgres psql -c "ALTER SYSTEM SET shared_buffers = '256MB';"
+                sudo -u postgres psql -c "ALTER SYSTEM SET work_mem = '64MB';"
+                sudo -u postgres psql -c "SELECT pg_reload_conf();"
+            shell: bash
+
+        -   name: Set DATABASE_URL
+            run: echo "DATABASE_URL=${{ steps.db.outputs.driver }}://sylius:sylius@127.0.0.1/sylius?serverVersion=${{ steps.db.outputs.version }}" >> $GITHUB_ENV
+            shell: bash
 
         #####################################################################
         # Set up PHP & Symfony & Sylius                                     #
         #####################################################################
 
         -   name: Setup PHP
-            if: inputs.opcache_enable == ''
             uses: shivammathur/setup-php@v2
             with:
                 php-version: "${{ inputs.php_version }}"
                 extensions: "${{ inputs.php_extensions }}"
                 tools: "${{ inputs.php_tools }}"
                 coverage: "${{ inputs.php_coverage }}"
-
-        -   name: Setup PHP with OPcache configuration
-            if: inputs.opcache_enable != ''
-            uses: shivammathur/setup-php@v2
-            with:
-                php-version: "${{ inputs.php_version }}"
-                extensions: "${{ inputs.php_extensions }}"
-                tools: "${{ inputs.php_tools }}"
-                coverage: "${{ inputs.php_coverage }}"
-                ini-values: ${{ inputs.opcache_enable == 'yes' && 'opcache.enable=1, opcache.enable_cli=0, opcache.validate_timestamps=1, opcache.revalidate_freq=0' || 'opcache.enable=0, opcache.enable_cli=0' }}
+                ini-values: ${{ inputs.opcache_enable == 'yes' && 'opcache.enable=1, opcache.enable_cli=0, opcache.validate_timestamps=1, opcache.revalidate_freq=0' || inputs.opcache_enable == 'no' && 'opcache.enable=0, opcache.enable_cli=0' || '' }}
 
         -   name: Output PHP version for Symfony CLI
             run: php -v | head -n 1 | awk '{ print $2 }' > .php-version
@@ -286,8 +323,9 @@ runs:
                 which chromedriver || echo "Google Chromedriver successfully removed"
             shell: bash
 
-        -   uses: browser-actions/setup-chrome@latest
+        -   name: Setup Chrome
             if: inputs.e2e_js == 'yes'
+            uses: browser-actions/setup-chrome@v2
             with:
                 chrome-version: "${{ inputs.chrome_version }}"
                 install-chromedriver: 'true'
