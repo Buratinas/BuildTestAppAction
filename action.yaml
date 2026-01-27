@@ -184,12 +184,13 @@ runs:
         -   name: Optimize PostgreSQL for CI
             if: steps.db.outputs.type == 'postgres'
             run: |
-                sudo -u postgres psql -c "ALTER SYSTEM SET fsync = 'off';"
-                sudo -u postgres psql -c "ALTER SYSTEM SET synchronous_commit = 'off';"
-                sudo -u postgres psql -c "ALTER SYSTEM SET full_page_writes = 'off';"
-                sudo -u postgres psql -c "ALTER SYSTEM SET shared_buffers = '256MB';"
-                sudo -u postgres psql -c "ALTER SYSTEM SET work_mem = '64MB';"
-                sudo -u postgres psql -c "SELECT pg_reload_conf();"
+                export PGPASSWORD=sylius
+                psql -h 127.0.0.1 -U sylius -d sylius -c "ALTER SYSTEM SET fsync = 'off';"
+                psql -h 127.0.0.1 -U sylius -d sylius -c "ALTER SYSTEM SET synchronous_commit = 'off';"
+                psql -h 127.0.0.1 -U sylius -d sylius -c "ALTER SYSTEM SET full_page_writes = 'off';"
+                psql -h 127.0.0.1 -U sylius -d sylius -c "ALTER SYSTEM SET shared_buffers = '256MB';"
+                psql -h 127.0.0.1 -U sylius -d sylius -c "ALTER SYSTEM SET work_mem = '64MB';"
+                psql -h 127.0.0.1 -U sylius -d sylius -c "SELECT pg_reload_conf();"
             shell: bash
 
         -   name: Set DATABASE_URL
