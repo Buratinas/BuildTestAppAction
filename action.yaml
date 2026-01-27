@@ -181,6 +181,17 @@ runs:
                 postgresql password: "sylius"
                 postgresql db: "sylius"
 
+        -   name: Wait for PostgreSQL to be ready
+            if: steps.db.outputs.type == 'postgres'
+            run: |
+                export PGPASSWORD=sylius
+                for i in {1..30}; do
+                    psql -h 127.0.0.1 -U sylius -d sylius -c "SELECT 1" >/dev/null 2>&1 && break
+                    echo "Waiting for PostgreSQL... ($i/30)"
+                    sleep 1
+                done
+            shell: bash
+
         -   name: Optimize PostgreSQL for CI
             if: steps.db.outputs.type == 'postgres'
             run: |
