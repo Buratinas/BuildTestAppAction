@@ -77,6 +77,7 @@ No need to define it in your workflow.
 | `sylius_integration`         | Internal usage: run Sylius with a specific integration.                                | *(empty)*                                               | No       |
 | `node_version`               | Node.js version to install (used when `e2e_js: yes`).                                  | `22.x`                                                  | No       |
 | `chrome_version`             | Google Chrome version to install (for JS e2e tests).                                   | `stable`                                                | No       |
+| `load_fixtures`              | Whether to load Sylius fixtures (`yes` or `no`).                                       | `yes`                                                   | No       |
 | `opcache_enable`             | Control OPcache (`yes`=enable with test-optimized settings, `no`=disable).             | *(empty)* – use system defaults                         | No       |
 | `composer_minimum_stability` | Set minimum-stability in composer.json (e.g., `stable`, `RC`, `beta`, `alpha`, `dev`). | *(empty)* – no restriction applied                      | No       |
 | `composer_prefer_stable`     | Set prefer-stable in composer.json (`yes` or `no`).                                    | *(empty)* – no restriction applied                      | No       |
