@@ -80,3 +80,16 @@ No need to define it in your workflow.
 | `opcache_enable`             | Control OPcache (`yes`=enable with test-optimized settings, `no`=disable).             | *(empty)* – use system defaults                         | No       |
 | `composer_minimum_stability` | Set minimum-stability in composer.json (e.g., `stable`, `RC`, `beta`, `alpha`, `dev`). | *(empty)* – no restriction applied                      | No       |
 | `composer_prefer_stable`     | Set prefer-stable in composer.json (`yes` or `no`).                                    | *(empty)* – no restriction applied                      | No       |
+
+## Upgrading
+
+### v4.1.0
+
+Database containers (MySQL, MariaDB, PostgreSQL) are now started using `docker run` directly instead of
+third-party GitHub Actions (`mirromutth/mysql-action`, `getong/mariadb-action`, `harmon758/postgresql-action`).
+
+This is fully backwards compatible - no changes to inputs or outputs are needed. The change was required because
+GitHub Actions runners upgraded to Docker Engine 29, which requires API version 1.44+. The old third-party actions
+shipped Docker CLI v1.40 and stopped working.
+
+All database types now have a unified health check that waits up to 150s for the container to become ready.

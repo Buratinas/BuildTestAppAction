@@ -156,40 +156,82 @@ runs:
 
         -   name: Setup MySQL
             if: steps.db.outputs.type == 'mysql'
-            uses: mirromutth/mysql-action@v1.1
-            with:
-                mysql version: "${{ steps.db.outputs.version }}"
-                mysql user: "sylius"
-                mysql password: "sylius"
-                mysql database: "sylius"
+            run: |
+                docker run -d \
+                    --name mysql \
+                    -e MYSQL_ROOT_PASSWORD=root \
+                    -e MYSQL_USER=sylius \
+                    -e MYSQL_PASSWORD=sylius \
+                    -e MYSQL_DATABASE=sylius \
+                    -p 3306:3306 \
+                    --health-cmd="mysqladmin ping -h 127.0.0.1 --silent" \
+                    --health-interval=5s \
+                    --health-timeout=3s \
+                    --health-retries=30 \
+                    mysql:${{ steps.db.outputs.version }}
+            shell: bash
 
         -   name: Setup MariaDB
             if: steps.db.outputs.type == 'mariadb'
-            uses: getong/mariadb-action@v1.1
-            with:
-                mariadb version: "${{ steps.db.outputs.version }}"
-                mysql user: "sylius"
-                mysql password: "sylius"
-                mysql database: "sylius"
+            run: |
+                docker run -d \
+                    --name mariadb \
+                    -e MYSQL_ROOT_PASSWORD=root \
+                    -e MYSQL_USER=sylius \
+                    -e MYSQL_PASSWORD=sylius \
+                    -e MYSQL_DATABASE=sylius \
+                    -p 3306:3306 \
+                    --health-cmd="mysqladmin ping -h 127.0.0.1 --silent" \
+                    --health-interval=5s \
+                    --health-timeout=3s \
+                    --health-retries=30 \
+                    mariadb:${{ steps.db.outputs.version }}
+            shell: bash
 
         -   name: Setup PostgreSQL
             if: steps.db.outputs.type == 'postgres'
-            uses: harmon758/postgresql-action@v1
-            with:
-                postgresql version: "${{ steps.db.outputs.version }}"
-                postgresql user: "sylius"
-                postgresql password: "sylius"
-                postgresql db: "sylius"
-
-        -   name: Wait for PostgreSQL to be ready
-            if: steps.db.outputs.type == 'postgres'
             run: |
-                export PGPASSWORD=sylius
-                for i in {1..30}; do
-                    psql -h 127.0.0.1 -U sylius -d sylius -c "SELECT 1" >/dev/null 2>&1 && break
-                    echo "Waiting for PostgreSQL... ($i/30)"
-                    sleep 1
+                docker run -d \
+                    --name postgres \
+                    -e POSTGRES_USER=sylius \
+                    -e POSTGRES_PASSWORD=sylius \
+                    -e POSTGRES_DB=sylius \
+                    -p 5432:5432 \
+                    --health-cmd="pg_isready -U sylius" \
+                    --health-interval=5s \
+                    --health-timeout=3s \
+                    --health-retries=30 \
+                    postgres:${{ steps.db.outputs.version }}
+            shell: bash
+
+        -   name: Wait for database to be ready
+            run: |
+                if [ "${{ steps.db.outputs.type }}" = "postgres" ]; then
+                    CONTAINER="postgres"
+                elif [ "${{ steps.db.outputs.type }}" = "mariadb" ]; then
+                    CONTAINER="mariadb"
+                else
+                    CONTAINER="mysql"
+                fi
+                for i in {1..75}; do
+                    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER" 2>/dev/null || echo "starting")
+                    if [ "$STATUS" = "healthy" ]; then
+                        echo "Database is ready!"
+                        break
+                    fi
+                    if [ "$STATUS" = "unhealthy" ]; then
+                        echo "::error::Database container is unhealthy"
+                        docker logs "$CONTAINER"
+                        exit 1
+                    fi
+                    echo "Waiting for database... ($i/75, status: $STATUS)"
+                    sleep 2
                 done
+                if [ "$STATUS" != "healthy" ]; then
+                    echo "::error::Database failed to become healthy within 150s"
+                    docker logs "$CONTAINER"
+                    exit 1
+                fi
             shell: bash
 
         -   name: Optimize PostgreSQL for CI
