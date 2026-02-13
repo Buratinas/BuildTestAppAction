@@ -103,6 +103,11 @@ inputs:
         description: "Chrome version to be used"
         default: "stable"
 
+    load_fixtures:
+        required: false
+        description: "Whether to load Sylius fixtures"
+        default: "yes"
+
     opcache_enable:
         required: false
         description: "Control OPcache configuration (yes=enable with optimal settings, no=disable, empty=use system defaults)"
@@ -450,6 +455,7 @@ runs:
             working-directory: "${{ env.test_dir }}"
 
         -   name: Load fixtures
+            if: inputs.load_fixtures == 'yes'
             run: $CONSOLE sylius:fixtures:load -n
             shell: bash
             working-directory: "${{ env.test_dir }}"
