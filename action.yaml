@@ -181,7 +181,7 @@ runs:
                     -e MYSQL_PASSWORD=sylius \
                     -e MYSQL_DATABASE=sylius \
                     -p 3306:3306 \
-                    --health-cmd="mysqladmin ping -h 127.0.0.1 --silent" \
+                    --health-cmd="healthcheck.sh --connect --innodb_initialized" \
                     --health-interval=5s \
                     --health-timeout=3s \
                     --health-retries=30 \
