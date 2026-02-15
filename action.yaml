@@ -376,7 +376,7 @@ runs:
             run: |
                 which google-chrome && google-chrome --version || echo "Google Chrome successfully removed"
                 sudo dpkg --remove google-chrome-stable
-                sudo apt-get purge -y google-chrome-stable 2> /dev/null
+                sudo apt-get purge -y google-chrome-stable 2> /dev/null || echo "Google Chrome not found for purging"
                 sudo rm -f /usr/bin/google-chrome /usr/bin/chromedriver
                 which google-chrome && google-chrome --version || echo "Google Chrome successfully removed"
                 which chromedriver || echo "Google Chromedriver successfully removed"
